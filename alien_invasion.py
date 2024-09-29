@@ -1,14 +1,15 @@
-from hmac import new
-from math import e
 import sys
 import pygame
-from time import sleep
+from time import sleep, time
 from settings import Settings
 from ship import Ship
 from bullet import Bullet
 from alien import Alien
 from game_stats import GameStats
 from button import Button
+
+GREY_COLOR = (128, 128, 128)
+GREEN_COLOR = (0, 135, 0)
 
 
 class AlienInvasion:
@@ -37,6 +38,25 @@ class AlienInvasion:
         # Make the Play button
         self.play_button = Button(self, "Play")
 
+        # Make the level button
+        self.level = 1
+        self.easy_button = Button(self, "Easy", button_color=GREY_COLOR)
+        self.normal_button = Button(self, "Normal", button_color=GREEN_COLOR)
+        self.hard_button = Button(self, "Hard", button_color=GREY_COLOR)
+
+        self.easy_button.set_position(self.easy_button.rect.x - 2 * self.play_button.width,
+                                      self.easy_button.rect.y + 2 * self.play_button.height)
+        self.normal_button.set_position(self.play_button.rect.x,
+                                        self.normal_button.rect.y + 2 * self.play_button.height)
+        self.hard_button.set_position(self.hard_button.rect.x + 2 * self.play_button.width,
+                                      self.hard_button.rect.y + 2 * self.play_button.height)
+
+        # Make time increase speed button
+        self.time_increase_speed_button = Button(
+            self, "TimeLevel", button_color=GREY_COLOR)
+        self.time_increase_speed_button.set_position(self.settings.screen_width - 2 * self.time_increase_speed_button.width,
+                                                     self.time_increase_speed_button.height)
+
     def _check_events(self):
         """Respond to keypresses and mouse events"""
         for event in pygame.event.get():
@@ -49,12 +69,46 @@ class AlienInvasion:
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_pos = pygame.mouse.get_pos()
                 self._check_play_button(mouse_pos)
+                self._check_level_button(mouse_pos)
+                self._check_time_increase_speed_button(mouse_pos)
 
     def _check_play_button(self, mouse_pos):
         '''Start a new game when the player clicks Play'''
         botton_clicked = self.play_button.rect.collidepoint(mouse_pos)
         if botton_clicked and not self.game_active:
             self._start_game()
+
+    def _check_level_button(self, mouse_pos):
+        '''Set the level of the game'''
+        easy_botton_clicked = self.easy_button.rect.collidepoint(mouse_pos)
+        normal_botton_clicked = self.normal_button.rect.collidepoint(mouse_pos)
+        hard_botton_clicked = self.hard_button.rect.collidepoint(mouse_pos)
+        if easy_botton_clicked and not self.game_active:
+            self.level = 0.7
+            self.easy_button.set_color(GREEN_COLOR)
+            self.normal_button.set_color(GREY_COLOR)
+            self.hard_button.set_color(GREY_COLOR)
+        elif normal_botton_clicked and not self.game_active:
+            self.level = 1.0
+            self.easy_button.set_color(GREY_COLOR)
+            self.normal_button.set_color(GREEN_COLOR)
+            self.hard_button.set_color(GREY_COLOR)
+        elif hard_botton_clicked and not self.game_active:
+            self.level = 2.0
+            self.easy_button.set_color(GREY_COLOR)
+            self.normal_button.set_color(GREY_COLOR)
+            self.hard_button.set_color(GREEN_COLOR)
+
+    def _check_time_increase_speed_button(self, mouse_pos):
+        '''Set the level of the game'''
+        time_increase_speed_botton_clicked = self.time_increase_speed_button.rect.collidepoint(
+            mouse_pos)
+        if time_increase_speed_botton_clicked and not self.game_active:
+            self.settings.time_increase_speed = not self.settings.time_increase_speed
+            if self.settings.time_increase_speed:
+                self.time_increase_speed_button.set_color(GREEN_COLOR)
+            else:
+                self.time_increase_speed_button.set_color(GREY_COLOR)
 
     def _start_game(self):
         '''Start the game'''
@@ -66,6 +120,8 @@ class AlienInvasion:
 
         # Hide the mouse cursor
         pygame.mouse.set_visible(False)
+
+        self.last_time = time()
 
     def _check_key_down_events(self, event):
         '''Respond to keypresses'''
@@ -118,6 +174,7 @@ class AlienInvasion:
             # Destroy existing bullets and create new fleet
             self.bullets.empty()
             self._create_fleet()
+            self.settings.increase_speed()
 
     def _create_alien(self, x_position, y_position):
         """Create an alien and place it in the row"""
@@ -194,6 +251,8 @@ class AlienInvasion:
 
     def _reset_game(self):
         '''Reset the game'''
+        self.settings.initialize_dynamic_settings(self.level)
+
         # Empty the list of aliens and bullets
         self.aliens.empty()
         self.bullets.empty()
@@ -201,6 +260,14 @@ class AlienInvasion:
         # Create a new fleet and center the ship
         self._create_fleet()
         self.ship.center_ship()
+
+    def _update_time_increase_speed(self):
+        '''Increase the speed of the game'''
+        current_time = time()
+        if current_time - self.last_time >= self.settings.time_interval:  # 检查是否达到30秒
+            if self.settings.time_increase_speed:
+                self.settings.increase_speed()
+            self.last_time = current_time  # 重置计时器
 
     def _update_screen(self):
         """Update images on the screen, and flip to the new screen"""
@@ -214,6 +281,10 @@ class AlienInvasion:
 
         if not self.game_active:
             self.play_button.draw_button()
+            self.easy_button.draw_button()
+            self.normal_button.draw_button()
+            self.hard_button.draw_button()
+            self.time_increase_speed_button.draw_button()
 
         # Make the most recently drawn screen visible
         pygame.display.flip()
@@ -221,6 +292,8 @@ class AlienInvasion:
     def run_game(self):
         """start the main loop for the game"""
         while True:
+            print(self.settings.alien_speed)
+
             # watch for keyboard and mouse events
             self._check_events()
 
@@ -228,6 +301,7 @@ class AlienInvasion:
                 self.ship.update()
                 self._update_bullets()
                 self._update_aliens()
+                self._update_time_increase_speed()
 
             self._update_screen()
             self.clock.tick(60)
