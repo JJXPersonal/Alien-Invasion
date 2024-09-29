@@ -2,10 +2,12 @@ from hmac import new
 from math import e
 import sys
 import pygame
+from time import sleep
 from settings import Settings
 from ship import Ship
 from bullet import Bullet
 from alien import Alien
+from game_stats import GameStats
 
 
 class AlienInvasion:
@@ -19,11 +21,17 @@ class AlienInvasion:
             (self.settings.screen_width, self.settings.screen_height))
         pygame.display.set_caption("Alien Invasion")
 
+        # Create an instance to store game statistics
+        self.stats = GameStats(self)
+
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
 
         self.aliens = pygame.sprite.Group()
         self._create_fleet()
+
+        # Active state
+        self.game_active = False
 
     def _check_events(self):
         """Respond to keypresses and mouse events"""
@@ -125,6 +133,14 @@ class AlienInvasion:
             alien.rect.y += self.settings.fleet_drop_speed
         self.settings.fleet_direction *= -1
 
+    def _cbeck_aliens_bottom(self):
+        '''Check if any aliens have reached the bottom of the screen'''
+        for alien in self.aliens.sprites():
+            if alien.rect.bottom >= self.screen.get_rect().bottom:
+                # Treat this the same as if the ship got hit
+                self._ship_hit()
+                break
+
     def _update_aliens(self):
         """Update the positions of all aliens in the fleet"""
         self._check_fleet_edges()
@@ -132,7 +148,28 @@ class AlienInvasion:
 
         # Check the collisions between aliens and the ship
         if pygame.sprite.spritecollideany(self.ship, self.aliens):
-            print("Ship hit!!!")
+            self._ship_hit()
+
+        self._cbeck_aliens_bottom()
+
+    def _ship_hit(self):
+        '''Respond to the ship being hit by an alien'''
+        if self.stats.ships_left > 0:
+            # Decrement ships_left
+            self.stats.ships_left -= 1
+
+            # Clear the list of aliens and bullets
+            self.aliens.empty()
+            self.bullets.empty()
+
+            # Create a new fleet and center the ship
+            self._create_fleet()
+            self.ship.center_ship()
+
+            # Pause
+            sleep(0.5)
+        else:
+            self.stats.game_active = False
 
     def _update_screen(self):
         """Update images on the screen, and flip to the new screen"""
@@ -152,9 +189,12 @@ class AlienInvasion:
         while True:
             # watch for keyboard and mouse events
             self._check_events()
-            self.ship.update()
-            self._update_bullets()
-            self._update_aliens()
+
+            if self.game_active:
+                self.ship.update()
+                self._update_bullets()
+                self._update_aliens()
+
             self._update_screen()
             self.clock.tick(60)
 
